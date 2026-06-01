@@ -43,11 +43,15 @@ async def get_monarch_client() -> MonarchMoney:
     # If no secure session, try environment credentials
     email = os.getenv("MONARCH_EMAIL")
     password = os.getenv("MONARCH_PASSWORD")
+    mfa_secret = os.getenv("MONARCH_MFA_SECRET")
 
     if email and password:
         try:
             client = MonarchMoney()
-            await client.login(email, password)
+            login_kwargs = {"email": email, "password": password}
+            if mfa_secret:
+                login_kwargs["mfa_secret_key"] = mfa_secret
+            await client.login(**login_kwargs)
             logger.info(
                 "Successfully logged into Monarch Money with environment credentials"
             )
