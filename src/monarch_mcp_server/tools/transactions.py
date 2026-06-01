@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
+from monarch_mcp_server.tools.categories import resolve_category_id
 from monarch_mcp_server.helpers import (
     first_present,
     format_exception,
@@ -683,7 +684,7 @@ async def update_transaction(
 
     Args:
         transaction_id: The ID of the transaction to update
-        category_id: New category ID
+        category_id: New category ID, or case-insensitive category name
         merchant_name: New merchant or payee name
         goal_id: Goal ID to associate with the transaction
         amount: New transaction amount
@@ -698,7 +699,9 @@ async def update_transaction(
         update_data: Dict[str, Any] = {"transaction_id": transaction_id}
 
         if category_id is not None:
-            update_data["category_id"] = category_id
+            update_data["category_id"] = await resolve_category_id(
+                category_id, client
+            )
         if merchant_name is not None:
             update_data["merchant_name"] = merchant_name
         if goal_id is not None:
@@ -727,12 +730,13 @@ async def categorize_transaction(transaction_id: str, category_id: str) -> str:
 
     Args:
         transaction_id: The ID of the transaction to categorize
-        category_id: The category ID to assign
+        category_id: The category ID or case-insensitive name to assign
     """
     try:
         client = await get_monarch_client()
+        resolved_id = await resolve_category_id(category_id, client)
         result = await client.update_transaction(
-            transaction_id=transaction_id, category_id=category_id
+            transaction_id=transaction_id, category_id=resolved_id
         )
         return json_success(result)
     except Exception as e:
@@ -815,25 +819,29 @@ async def bulk_categorize_transactions(
 
     Args:
         transaction_ids: List of transaction IDs to categorize
-        category_id: The category ID to apply to all transactions
+        category_id: The category ID or case-insensitive name to apply to all transactions
         mark_reviewed: Whether to also mark transactions as reviewed (default: True)
-        dry_run: If True, return what would be updated without making changes
+        dry_run: If True, return what would be updated without making changes.
+            The response shows both the input and the id it resolved to, so
+            you can confirm name resolution before applying.
 
     Returns:
         Summary of results including success/failure counts. When dry_run is
         True, the response includes a "dry_run" flag and the planned updates.
     """
     try:
+        client = await get_monarch_client()
+        resolved_id = await resolve_category_id(category_id, client)
+
         if dry_run:
             return json_success({
                 "dry_run": True,
                 "total": len(transaction_ids),
                 "transaction_ids": list(transaction_ids),
-                "category_id": category_id,
+                "category_id": resolved_id,
+                "category_input": category_id,
                 "mark_reviewed": mark_reviewed,
             })
-
-        client = await get_monarch_client()
 
         results: Dict[str, Any] = {
             "total": len(transaction_ids),
@@ -845,7 +853,7 @@ async def bulk_categorize_transactions(
         async def _update_one(txn_id: str) -> None:
             update_params: Dict[str, Any] = {
                 "transaction_id": txn_id,
-                "category_id": category_id,
+                "category_id": resolved_id,
             }
             if mark_reviewed:
                 update_params["needs_review"] = False

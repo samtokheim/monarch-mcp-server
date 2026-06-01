@@ -1,6 +1,7 @@
 """Category tools."""
 
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -29,11 +30,65 @@ async def get_transaction_categories() -> str:
                     "icon": cat.get("icon"),
                     "group": group.get("name") if isinstance(group, dict) else None,
                     "group_id": group.get("id") if isinstance(group, dict) else None,
+                    "is_system": cat.get("isSystemCategory"),
                 }
             )
         return json_success(categories)
     except Exception as e:
         return json_error("get_transaction_categories", e)
+
+
+_LIKELY_ID_PATTERN = re.compile(r"^\d{10,}$")
+
+
+async def resolve_category_id(value: str, client: Any) -> str:
+    """Resolve a category id-or-name into a Monarch category id.
+
+    If *value* matches the shape of a Monarch id (10+ digit numeric string),
+    it is returned unchanged. Otherwise it is treated as a case-insensitive
+    category name and looked up against the live categories list. Raises
+    ValueError on no match or ambiguous match, with a message listing valid
+    options so the caller can retry.
+    """
+    value = (value or "").strip()
+    if not value:
+        raise ValueError("Category value is empty.")
+    if _LIKELY_ID_PATTERN.match(value):
+        return value
+
+    data = await client.get_transaction_categories()
+    target = value.casefold()
+    matches: List[Dict[str, Any]] = []
+    for cat in data.get("categories", []):
+        name = cat.get("name") or ""
+        if name.casefold() == target:
+            group = cat.get("group") or {}
+            matches.append(
+                {
+                    "id": cat.get("id"),
+                    "name": name,
+                    "group": group.get("name") if isinstance(group, dict) else None,
+                }
+            )
+
+    if len(matches) == 1:
+        return matches[0]["id"]
+
+    if len(matches) > 1:
+        formatted = ", ".join(
+            f'"{m["group"]}/{m["name"]}" (id={m["id"]})' for m in matches
+        )
+        raise ValueError(
+            f"Category name {value!r} is ambiguous; matches {len(matches)} "
+            f"categories: {formatted}. Pass the id directly to disambiguate."
+        )
+
+    all_names = sorted(
+        {(c.get("name") or "") for c in data.get("categories", []) if c.get("name")}
+    )
+    raise ValueError(
+        f"No category named {value!r}. Valid names: {', '.join(all_names)}"
+    )
 
 
 @mcp.tool()
