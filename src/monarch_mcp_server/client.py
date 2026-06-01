@@ -48,7 +48,12 @@ async def get_monarch_client() -> MonarchMoney:
     if email and password:
         try:
             client = MonarchMoney()
-            login_kwargs = {"email": email, "password": password}
+            login_kwargs = {
+                "email": email,
+                "password": password,
+                "use_saved_session": False,
+                "save_session": False,
+            }
             if mfa_secret:
                 login_kwargs["mfa_secret_key"] = mfa_secret
             await client.login(**login_kwargs)
