@@ -12,6 +12,18 @@ My MonarchMoney referral: https://www.monarchmoney.com/referral/ufmn0r83yf?r_sou
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@robcerda/monarch-mcp-server/badge" alt="monarch-mcp-server MCP server" />
 </a>
 
+## Official Monarch connector vs. this server
+
+Monarch now offers an **official, opt-in MCP connector** (remote, hosted at `https://api.monarch.com/mcp`, OAuth-based, set up under Settings → Integrations). For most people it's the easier and safer choice — there's no password handoff, no third-party library to trust, one-click revoke, and it won't break when Monarch changes its API. **If you mainly read your data, use the official connector.**
+
+Choose this self-hosted server if you:
+
+- **Do heavy bulk writes.** The official connector caps writes at **5/day on the Core plan** (10,000/day on Plus). Re-categorizing months of transactions, bulk-tagging, and merging merchants hit that wall fast. This server has **no write throttling** beyond Monarch's underlying API.
+- **Need the deeper write surface** — rules engine, recurring-stream editing, transaction splits, balance-history upload, and `dry_run=True` previews on bulk operations.
+- **Want everything local** — credentials and session stay on your machine; nothing flows through a hosted integration.
+
+Trade-offs to know: this server uses the unofficial community library (it can break on Monarch API changes), you enter credentials + MFA into `login_setup.py` (session stored locally), and there's no built-in audit log or undo — use `dry_run` to preview destructive bulk changes first.
+
 ## 🚀 Quick Start
 
 ### 1. Installation
